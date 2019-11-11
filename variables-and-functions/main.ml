@@ -284,5 +284,154 @@ ratio 3 10
 (**
   ラベル付き引数の利点
   - 引数の位置でなく名前に意味を持たせることができる
+  - (ただし位置について高階関数の場合は注意が必要)
   - 引数の型を推測しやすくなる
+*)
+
+(* 下記は同じ結果となる *)
+ratio 3 10
+ratio ~num:3 ~denom:10
+ratio ~denom:10 ~num:3
+(** output:
+  - : float = 0.3
+*)
+
+(* 高階関数のラベル *)
+(**
+  高階関数におけるラベルの扱いは注意が必要。
+  ラベル付き引数を高階関数に渡す場合は、引数の順序を同じにしなければいけない。
+*)
+let apply_to_tuple f (first, second) = f ~first ~second
+let apply_to_tuple2 f (first, second) = f ~second ~first
+(* apply_to_tuple2 は位置が合わないためエラーとなる *)
+
+(* 例 *)
+apply_to_tuple (fun ~first ~second -> first / second) (3,4)
+(** output:
+  - : int = 0
+*)
+
+(**
+  apply_to_tuple2 では second,firstの順でfに適用するよう定義されているが、
+  f は first second の順で引数を受け取るようになっているためエラーとなる。
+*)
+apply_to_tuple2 (fun ~first ~second -> first / second) (3,4)
+(** output:
+  Error: This function should have type second:'a -> first:'b -> 'c
+         but its first argument is labelled ~first
+*)
+
+
+(* オプショナル引数 *)
+(* オプショナル引数は他のプログラミング言語でいうデフォルト値のように利用できる *)
+(* つまり関数呼び出しの際に必ずしも引数として与えなくてもよい引数だ *)
+
+let concat ?sep x y = 
+  let sep = match sep with None -> "" | Some x -> x in
+  x ^ sep ^ y
+
+concat "foo" "bar"
+(** output:
+  - : string = "foobar"
+*)
+
+concat ~sep:"---" "foo" "bar"
+(** output:
+  - : string = "foo---bar"
+*)
+
+(* オプショナル引数にデフォルト値を設けたい場合は以下のようにする *)
+let concat ?(sep="") x y = x ^ sep ^ y
+concat "foo" "bar"
+(** output:
+  - : string = "foobar"
+*)
+concat ~sep:"---" "foo" "bar"
+(* 結果は上と同じため割愛 *)
+
+(* 明示的に Some や None を渡す場合は `~`ではなく、 ~?~を利用する *)
+concat "foo" "bar"
+concat ?sep:None "foo" "bar"
+concat ~sep:"---" "foo" "bar"
+concat ?sep:(Some "---") "foo" "bar"
+
+(* ラベル付き引数とオプショナル引数の型推論 *)
+
+(* 下記の例をながめる *)
+let number_deriv ~delta ~x ~y ~f =
+  let x' = x +. delta in (* OCamlでは変数に `'`を用いることができる *)
+  let y' = y +. delta in
+  (**
+    fはラベル付き引数をとるため y:float -> x:float -> float
+    または
+    x:float -> y:float -> float
+    をとることができる
+  *)
+  let base = f ~x ~y in 
+  let dx = (f ~x:x' ~y -. base) /. delta in
+  let dy = (f ~x ~y:y' -. base) /. delta in
+  (dx,dy)
+
+(* 一方で、fがオプショナル付き引数をとると解釈する場合もある *)
+(* コンパイラでは、オプショナル引数よりもラベル引数を優先する *)
+
+(* たとえば、引数の順番を入れ替えるとコンパイラは解釈できずエラーとなる *)
+let number_deriv ~delta ~x ~y ~f = 
+  let x' = x +. delta in
+  let y' = y +. delta in
+  let base = f ~x ~y in
+  let dx = (f ~y ~x:x' -. base) /. delta in
+  let dy = (f ~x ~y:y' -. base) /. delta in
+  (dx,dy)
+(** ouput:
+  Error: This function is applied to arguments
+         in an order different from other calls.
+         This is only allowed when the real type is known.
+*)
+
+(* しかし、fに型アノテーションを用いることでエラーなく実装できる *)
+let number_deriv ~delta ~x ~y ~(f: x:float -> y:float -> float) = 
+  let x' = x +. delta in
+  let y' = y +. delta in
+  let base = f ~x ~y in
+  let dx = (f ~y ~x:x' -. base) /. delta in
+  let dy = (f ~x ~y:y' -. base) /. delta in
+  (dx,dy)
+
+(* オプショナル引数と部分適用について *)
+
+(* 以下のとおり、オプショナル引数を持つ関数をラップする *)
+let colon_concat = concat ~sep:":"
+colon_concat "a" "b"
+
+(* concatを部分適用したものをラップするとどうなるか *)
+let prepend_pound = concat "# "
+prepend_pound "a BASH comment"
+
+(* オプショナル引数を与えようとするとどうなるか *)
+prepend_pound "a BASH comment" ~sep:":"
+(** output:
+  Error: This function has type string -> string
+         It is applied to too many arguments; maybe you forgot a `;'.
+*)
+
+
+(* 理由は、オプショナル引数の後に定義された引数が渡された場合、それよりも前の位置にあるオプショナル引数は削除されるためだ *)
+(* つまりオプショナル引数を2番目以降に定義すればこの問題は解決できる *)
+let concat x ?(sep="") y = x ^ sep ^ y
+let prepend_pound = concat "# " ~sep:"--- "
+prepend_pound "a BASH comment"
+
+(* ただし、一番最後にオプショナル引数を置いた場合は、オプショナル引数の省略ができない *)
+let concat x y ?(sep="") = x ^ sep ^ y
+(* 下記はオプショナル引数を省略できないことを示している *)
+(** output:
+  Warning 16: this optional argument cannot be erased.
+  val concat : string -> string -> ?sep:string -> string = <fun>
+*)
+
+concat "a" "b"
+(* sepが省略されず、必ず付けなければいけないことがわかる *)
+(** output:
+  - : ?sep:string -> string = <fun>
 *)
