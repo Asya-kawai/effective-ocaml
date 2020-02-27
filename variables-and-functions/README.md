@@ -10,3 +10,4 @@ OCaml の関数は その引数のとり方や ラベル付き（名前付き）
 # Reference
 
 * http://dev.realworldocaml.org/variables-and-functions.html
+* https://ocaml.org/learn/tutorials/labels.ja.html
