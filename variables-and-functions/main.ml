@@ -133,7 +133,7 @@ List.map ~f:(fun g -> g "Hello World") transforms
 (* 以下の2つは同じ意味となる *)
 (fun x -> x +1) 7
 let x = 7 in x + 1
-(* モナドを利用する際に必要となるので気にかけておきたいが、そもそもモナド不要かも *)
+(* モナドを利用する際に必要となるので気にかけておきたいが、OCamlにとってそもそもモナド不要かも *)
 
 (* 複数の引数をとる場合、以下の2通りの書きかたできる *)
 (* 下記は2つの引数の差を絶対値として出力する関数 *)
@@ -415,9 +415,8 @@ prepend_pound "a BASH comment" ~sep:":"
          It is applied to too many arguments; maybe you forgot a `;'.
 *)
 
-
-(* 理由は、オプショナル引数の後に定義された引数が渡された場合、それよりも前の位置にあるオプショナル引数は削除されるためだ *)
-(* つまりオプショナル引数を2番目以降に定義すればこの問題は解決できる *)
+(* この理由は、オプショナル引数の後に定義された引数が渡された場合、それよりも前の位置にあるオプショナル引数は削除されるためだ *)
+(* つまりオプショナル引数を後ろから2番目以降に定義すればこの問題は解決できる *)
 let concat x ?(sep="") y = x ^ sep ^ y
 let prepend_pound = concat "# " ~sep:"--- "
 prepend_pound "a BASH comment"
@@ -431,7 +430,13 @@ let concat x y ?(sep="") = x ^ sep ^ y
 *)
 
 concat "a" "b"
-(* sepが省略されず、必ず付けなければいけないことがわかる *)
+(** sepが省略されず、必ず付けなければいけないことがわかる。
+  というのも outputが ?sep:string -> string = <fun> となっており、
+  オプショナル引数 sep を受け取る関数として推論されているため。
+*)
 (** output:
   - : ?sep:string -> string = <fun>
 *)
+
+
+
